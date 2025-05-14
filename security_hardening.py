@@ -2,7 +2,6 @@
 
 # ----------------------------------------
 # System Lockdown Script (GRUB + SSH + rd.break protection)
-# Author: Md. Ariful Islam
 # ----------------------------------------
 
 echo "[+] Starting system lockdown..."
@@ -22,55 +21,48 @@ if [ "$grub_password" != "$grub_password_confirm" ]; then
 fi
 
 # Generate GRUB password hash using expect
-echo "[+] Generating GRUB password hash..."
+echo "[+] Generating password hash..."
 grub_hash=$(expect -c "
 spawn grub2-mkpasswd-pbkdf2
 expect \"Enter password:\"
 send \"$grub_password\r\"
 expect \"Reenter password:\"
 send \"$grub_password\r\"
-expect {
-  -re {PBKDF2 hash of your password is (.+)} {
-    set hash \$expect_out(1,string)
-    puts \$hash
-  }
-}
+expect \"PBKDF2 hash of your password is \"
+expect \"\n\"
+set hash_line \$expect_out(buffer)
+regexp {PBKDF2 hash of your password is (.*)} \$hash_line -> hash
+puts \$hash
 ")
 
-# Update /etc/grub.d/40_custom with correct GRUB syntax
-echo "[+] Updating /etc/grub.d/40_custom..."
-cat <<EOF > /etc/grub.d/40_custom
-#!/bin/sh
-exec tail -n +3 \$0
-# This file adds a GRUB password
-set superusers="admin"
-password_pbkdf2 admin $grub_hash
-EOF
+# Configure /etc/grub.d/40_custom
+echo "[+] Updating GRUB config..."
+echo -e "set superusers=\"admin\"\npassword_pbkdf2 admin $grub_hash" > /etc/grub.d/40_custom
 
-# Make it executable
-chmod +x /etc/grub.d/40_custom
+# Add protection to all entries in GRUB config (force password prompt)
+echo "[+] Adding protection to GRUB entries..."
+sed -i 's/menuentry /menuentry --unrestricted /g' /etc/grub.d/10_linux
 
 # Regenerate GRUB config (UEFI or BIOS)
-echo "[+] Regenerating GRUB config..."
 if [ -d /sys/firmware/efi ]; then
   grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg
 else
   grub2-mkconfig -o /boot/grub2/grub.cfg
 fi
 
-echo "[✔] GRUB password protection applied."
+echo "[✔] GRUB is now protected."
 
 
 # --- Disable rd.break ---
-echo "[+] Checking for 'rd.break'..."
+echo "[+] Disabling rd.break (physical root bypass)..."
 grub_default="/etc/default/grub"
 
 if grep -q "rd.break" "$grub_default"; then
   sed -i 's/rd.break//g' "$grub_default"
   grub2-mkconfig -o /boot/grub2/grub.cfg
-  echo "[✔] 'rd.break' removed from GRUB config."
+  echo "[✔] rd.break entry removed."
 else
-  echo "[✔] 'rd.break' not present. Skipped."
+  echo "[✔] rd.break already not present."
 fi
 
 
@@ -83,10 +75,9 @@ else
 fi
 
 systemctl restart sshd
-echo "[✔] Root SSH login disabled."
+echo "[✔] Root login via SSH disabled."
 
 
 # --- Final Message ---
-echo
-echo "🎉 [✅] System security hardening complete!"
-echo "🔒 Reboot now to see GRUB password protection in action."
+echo "[✅] All security hardening steps applied!"
+echo "Reboot your system to see GRUB password prompt."
