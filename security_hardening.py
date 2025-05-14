@@ -21,9 +21,9 @@ echo -e "set superusers=\"admin\"\npassword_pbkdf2 admin $grub_hash" >> /etc/gru
 
 # Regenerate GRUB config based on system (UEFI or BIOS)
 if [ -d /sys/firmware/efi ]; then
-  grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg  # UEFI systems
+  grub2-mconfig -o /boot/efi/EFI/rocky/grub.cfg  # UEFI systems
 else
-  grub2-mkconfig -o /boot/grub2/grub.cfg  # Legacy BIOS systems
+  grub2-mconfig -o /boot/grub2/grub.cfg  # Legacy BIOS systems
 fi
 
 echo "[✔] GRUB is now secured with a password."
