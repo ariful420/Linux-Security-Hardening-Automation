@@ -20,20 +20,15 @@ if [ "$grub_password" != "$grub_password_confirm" ]; then
   exit 1
 fi
 
-# Generate GRUB password hash using expect
+# Generate GRUB password hash without expect
 echo "[+] Generating password hash..."
-grub_hash=$(expect -c "
-spawn grub2-mkpasswd-pbkdf2
-expect \"Enter password:\"
-send \"$grub_password\r\"
-expect \"Reenter password:\"
-send \"$grub_password\r\"
-expect \"PBKDF2 hash of your password is \"
-expect \"\n\"
-set hash_line \$expect_out(buffer)
-regexp {PBKDF2 hash of your password is (.*)} \$hash_line -> hash
-puts \$hash
-")
+grub_hash=$(grub2-mkpasswd-pbkdf2 <<< "$grub_password" | grep -oP 'PBKDF2 hash of your password is \K.*')
+
+# Check if the hash was generated
+if [ -z "$grub_hash" ]; then
+  echo "[X] Failed to generate password hash. Exiting."
+  exit 1
+fi
 
 # Configure /etc/grub.d/40_custom
 echo "[+] Updating GRUB config..."
