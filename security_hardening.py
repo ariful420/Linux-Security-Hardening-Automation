@@ -20,31 +20,31 @@ if [ "$grub_password" != "$grub_password_confirm" ]; then
   exit 1
 fi
 
-# Generate GRUB password hash without expect
-echo "[+] Generating password hash..."
-grub_hash=$(grub2-mkpasswd-pbkdf2 <<< "$grub_password" | grep -oP 'PBKDF2 hash of your password is \K.*')
+# Generate GRUB password hash using 'yes' to simulate interaction
+echo "[+] Generating GRUB password hash..."
+grub_hash=$(yes "$grub_password" | grub2-mkpasswd-pbkdf2 2>/dev/null | awk '/PBKDF2/ {print $NF}')
 
-# Check if the hash was generated
-if [ -z "$grub_hash" ]; then
-  echo "[X] Failed to generate password hash. Exiting."
+# Validate hash
+if [[ -z "$grub_hash" ]]; then
+  echo "[X] Failed to generate GRUB password hash. Exiting."
   exit 1
 fi
+echo "[✔] GRUB password hash generated."
 
 # Configure /etc/grub.d/40_custom
 echo "[+] Updating GRUB config..."
-echo -e "set superusers=\"admin\"\npassword_pbkdf2 admin $grub_hash" > /etc/grub.d/40_custom
-
-# Add protection to all entries in GRUB config (force password prompt)
-echo "[+] Adding protection to GRUB entries..."
-sed -i 's/menuentry /menuentry --unrestricted /g' /etc/grub.d/10_linux
+cat <<EOF > /etc/grub.d/40_custom
+set superusers="admin"
+password_pbkdf2 admin $grub_hash
+EOF
 
 # Regenerate GRUB config (UEFI or BIOS)
+echo "[+] Regenerating GRUB configuration..."
 if [ -d /sys/firmware/efi ]; then
   grub2-mkconfig -o /boot/efi/EFI/rocky/grub.cfg
 else
   grub2-mkconfig -o /boot/grub2/grub.cfg
 fi
-
 echo "[✔] GRUB is now protected."
 
 
@@ -74,5 +74,6 @@ echo "[✔] Root login via SSH disabled."
 
 
 # --- Final Message ---
+echo ""
 echo "[✅] All security hardening steps applied!"
-echo "Reboot your system to see GRUB password prompt."
+echo "👉 Reboot your system. At GRUB, you'll be prompted for a password if someone tries to edit entries with 'e'."
